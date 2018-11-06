@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request
 app = Flask(__name__)
-
+import requests
 
 @app.route('/')
 def homepage():
@@ -9,23 +9,37 @@ def homepage():
 @app.route('/answer',methods = ['POST', 'GET'])
 def answer():
    if request.method == 'POST':
-   	buy_commission = int((request.form['buy_commission']))
-   	initial_share_price = int((request.form['initial_share_price']))
-   	allotment = int((request.form['allotment']))
-   	final_share_price = int((request.form['final_share_price']))
-   	sell_commission = int((request.form['sell_commission']))
-   	tax_rate = int((request.form['capital_gain_tax_rate']))
-   	proceeds = allotment*final_share_price
-   	total_purchase_price = allotment*initial_share_price
-   	initial_investment = (total_purchase_price + buy_commission + sell_commission)
-   	taxable_gain = proceeds - initial_investment
-   	tax =(float) (tax_rate*taxable_gain)/100
-   	cost = initial_investment + tax
-   	net_profit = taxable_gain - tax
-   	roi = '{0:.2f}%'.format((net_profit)*100/(initial_investment+tax))
-   	break_even_share_price = (float)(initial_share_price + (float)(sell_commission + buy_commission)/allotment)
+      symbol = request.form['ticker_symbol']
+      r = requests.get('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol='+ symbol +'&apikey=O0VYSACAKHVTFZ1P')
+      data = r.json()
+      md = data['Meta Data']
+      lR = md['3. Last Refreshed']
+      tz = md['5. Time Zone']
+      dt = lR + " " + tz
+      si = data['Time Series (Daily)']
+      lds = si['2018-11-05']
+      osp = lds['1. open']
+      csp = lds['4. close']
+      sd = float(csp) - float(osp)
+      url = "http://d.yimg.com/autoc.finance.yahoo.com/autoc?query={}&region=1&lang=en".format(symbol)
+      result = requests.get(url).json()
+      for x in result['ResultSet']['Result']:
+        if x['symbol'] == symbol:
+            company = x['name']
 
-   	return render_template("answer.html",p = proceeds, c = cost, tpp = total_purchase_price, bc = buy_commission, sc = sell_commission, t = tax, np = net_profit, ri = roi, brk = break_even_share_price)
+      cn = company
+      answer = ''
+      answer += 'STOCK REPORT HAS BEEN RETRIEVED FOR THE COMPANY ' + symbol
+      answer += dt+"\n"
+      answer += "{} ({})\n".format(cn,symbol)
+
+      if sd < 0:
+        pc = sd/float(osp) * float(100)
+        answer += "{} {} ({}%)\n".format(csp,round(sd,2),round(pc,2))
+      else:
+        pc = sd/float(osp) * float(100)
+        answer += "{} +{} (+{}%)\n".format(csp,round(sd,2),round(pc,2))
+   return render_template("answer.html",p = answer)
 
 if __name__ == '__main__':
    app.run(debug = True)
